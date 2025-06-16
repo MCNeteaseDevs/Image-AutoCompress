@@ -1,0 +1,36 @@
+{
+    "MIN_RESOLUTION": {
+        "value": 32,
+        "description": "低于该分辨率的贴图，不进行压缩"
+    },
+    "PARTICLE_MIN_RESOLUTION": {
+        "value": 128,
+        "description": "低于该分辨率的特效图，不进行压缩"
+    },
+    "ICON_MIN_RESOLUTION": {
+        "value": 16,
+        "description": "低于该分辨率的方块、物品icon图，不进行压缩"
+    },
+    "NORMAL_QUALITY": {
+        "value": 0.9,
+        "description": "评估质量阈值-普通贴图"
+    },
+    "TEXT_QUALITY": {
+        "value": 0.95,
+        "description": "评估质量阈值-文本贴图需略高于普通贴图"
+    },
+    "BLACK_PATHS": {
+        "value": [
+            "textures\\environment",
+            "textures\\colormap",
+            "textures\\gui",
+            "textures\\map",
+            "textures\\misc",
+            "textures\\painting",
+            "textures\\particle\\particles.png",
+            "textures\\models",
+            "textures\\entity"
+        ],
+        "description": "黑名单目录(相对路径)，该目录下的图片不处理"
+    }
+}

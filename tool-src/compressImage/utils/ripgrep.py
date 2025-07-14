@@ -70,7 +70,7 @@ class JsonModifier:
                            stderr=subprocess.PIPE, 
                            check=True)
         except (subprocess.SubprocessError, FileNotFoundError):
-            raise RuntimeError("ripgrep不可用，请确保它已安装并在PATH中，或提供正确的路径。")
+            raise RuntimeError("ripgrep不可用，请确保它存储在./libs/ripgrep/rg.exe下。如没有，请尝试重装MCS。")
     
     @classmethod
     def Instance(cls):

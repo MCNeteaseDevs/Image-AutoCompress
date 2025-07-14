@@ -112,7 +112,8 @@ def evaluate_image_quality(original: Image.Image, compressed: Image.Image, image
     
     # 检查图像维度一致性
     if original_array.shape != compressed_array.shape:
-        raise ValueError(f"图像尺寸不匹配: {original_array.shape} vs {compressed_array.shape}")
+        # raise ValueError(f"图像尺寸不匹配: {original_array.shape} vs {compressed_array.shape}")
+        return {}
     
     result = {}
     

@@ -59,9 +59,16 @@ class ImageProcessingPipeline:
         try:
             image = Image.open(image_path)
             return image
+        except Image.UnidentifiedImageError as e:
+            # 图片损坏（图片文件内多了xmp元数据），抛出UnidentifiedImageError
+            info = "文件损坏，需用ps等软件打开、并重新导出（经软件处理一遍即可修复）"
+            return info
         except Exception as e:
-            logging.error(f"无法加载图像 {image_path}: {e}")
-            raise ValueError(f"无法加载图像: {e}")
+            # 封装错误信息，不输出log，改为不处理文件
+            error_type = type(e).__name__
+            info = f"文件打开失败，错误类型: {error_type}，错误信息: {e}"
+            # logging.error(f"无法加载图像 {image_path}: {e}")
+            return info
     
     def compress_image(self, image_path: str, output_path: str, res_path: str) -> CompressionResult:
         """
@@ -77,6 +84,10 @@ class ImageProcessingPipeline:
         threshold = self.quality_threshold
         # 1. 加载图像
         original_image = self._load_image(image_path)
+        if type(original_image) == str:
+            # 文件打开失败，记录错误信息
+            return self._get_error_result(image_path, info=original_image)
+        
         # 确保图像格式正确
         if original_image.mode == "P" and "transparency" in original_image.info:
             original_image = original_image.convert("RGBA")
@@ -88,7 +99,8 @@ class ImageProcessingPipeline:
         # 图像预处理：分析图像特性
         analysis_results = self.do_preprocess(original_image, original_array, image_path, res_path)
         if analysis_results.get("error"):
-            return self._get_error_result(image_path, original_size, original_width, original_height, analysis_results["error"])
+            return self._get_error_result(image_path, original_size=original_size, original_width=original_width, 
+                                        original_height=original_height, info=analysis_results["error"])
 
         # 根据处理结果，修改参数
         if analysis_results.get("quality_threshold"):
@@ -97,7 +109,7 @@ class ImageProcessingPipeline:
         # 图像处理：对图像进行压缩
         transform_results = self.do_process(
             original_image, image_path, output_path,
-            analysis_results.get("image_type", ImageType.PixelArt), original_size, threshold)
+            analysis_results.get("image_type", ImageType.PixelArt), original_size, threshold, analysis_results)
         # 封装result
         transform_results.is_sfx_image = analysis_results.get("is_ui_sfx", False)
         transform_results.is_text_image = analysis_results.get("is_text", False)
@@ -147,13 +159,19 @@ class ImageProcessingPipeline:
 
     def do_process(self, 
                 image: Image.Image, image_path: str, output_path: str,
-                image_type: str, original_size: int, threshold: float) -> CompressionResult:
+                image_type: str, original_size: int, threshold: float,
+                analysis_results: dict) -> CompressionResult:
         """
         处理单个图像
         
         Args:
+            image: 原始图像对象(PIL)
             image_path: 图像文件路径
             target_scales: 可选的压缩比例列表，如果为None则使用默认范围
+            image_type: 图像类型，如"pixel_art", "regular"等
+            original_size: 原始图像文件大小
+            threshold: 质量阈值，如果小于该值，则认为图像质量过低，不处理
+            analysis_results: 原始图像预处理的结果
         
         Returns:
             返回处理后的结果
@@ -184,36 +202,41 @@ class ImageProcessingPipeline:
             target_width = max(1, int(original_width * mid) & ~1)
             target_height = max(1, int(original_height * mid) & ~1)
 
-            # 如果压缩后，小于最小分辨率，则停止压缩
-            if target_width < config.MIN_RESOLUTION and target_height < config.MIN_RESOLUTION:
-                fail_result = self._get_error_result(
-                    image_path, original_size, original_width, original_height,
-                    "压缩后分辨率过低，不处理"
+            min_resolution = config.MIN_RESOLUTION
+            if analysis_results and analysis_results.get("is_icon"):
+                min_resolution = config.ICON_MIN_RESOLUTION
+            elif analysis_results and analysis_results.get("is_particle"):
+                min_resolution = config.PARTICLE_MIN_RESOLUTION
+            # 如果压缩后，小于最小分辨率，则跳过该分辨率的压缩
+            if target_width < min_resolution and target_height < min_resolution:
+                result = self._get_error_result(image_path, 
+                    original_size=original_size, original_width=original_width, original_height=original_height,
+                    compress_width=target_width, compress_height=target_height,
+                    info="压缩后分辨率过低，不处理"
                 )
-                break
+            else:
+                # 保持和原始图片的奇偶一致
+                if widthIsOdd:
+                    target_width += 1
+                if heightIsOdd:
+                    target_height += 1
 
-            # 保持和原始图片的奇偶一致
-            if widthIsOdd:
-                target_width += 1
-            if heightIsOdd:
-                target_height += 1
-
-            # 压缩图片、并评分
-            result = self._do_compress_image(
-                image_path=image_path,
-                output_dir=output_path,
-                filename=name,
-                fileext=ext,
-                image=image,
-                original_width=original_width,
-                original_height=original_height,
-                original_size=original_size,
-                target_width=target_width,
-                target_height=target_height,
-                image_type=image_type,
-                # TODO: 测试时，可将save_to_disk设置为True
-                save_to_disk=False
-            )
+                # 压缩图片、并评分
+                result = self._do_compress_image(
+                    image_path=image_path,
+                    output_dir=output_path,
+                    filename=name,
+                    fileext=ext,
+                    image=image,
+                    original_width=original_width,
+                    original_height=original_height,
+                    original_size=original_size,
+                    target_width=target_width,
+                    target_height=target_height,
+                    image_type=image_type,
+                    # TODO: 测试时，可将save_to_disk设置为True
+                    save_to_disk=False
+                )
 
             # 评估质量
             if result.get_quality_score() >= threshold:
@@ -226,7 +249,8 @@ class ImageProcessingPipeline:
                 # 保存最近的结果，并改为压缩失败
                 fail_result = result
                 fail_result.is_compressed = False
-                fail_result.info = "无压缩空间(压缩后质量太低)"
+                if not fail_result.info:
+                    fail_result.info = "无压缩空间(压缩后质量太低)"
         
         # 如果没有成功的结果，则返回失败结果
         if best_result is None:
@@ -293,22 +317,37 @@ class ImageProcessingPipeline:
                 logging.error(f"后处理 {process.get_name()} 失败: {e}", exc_info=True)
         return results
 
-    def _get_error_result(self, image_path: str, original_size: int, original_width: int, original_height: int, info: str) -> CompressionResult:
+    def _get_error_result(self, image_path: str, original_size: int=0, 
+                        original_width: int=0, original_height: int=0, 
+                        compress_width: int=None, compress_height: int=None, info: str=0) -> CompressionResult:
         """
         封装错误结果
+
+        Args:
+            image_path: 原始图像路径
+            original_size: 原始图像文件大小
+            original_width: 原始图像宽度
+            original_height: 原始图像高度
+            compress_width: 原始图像宽度
+            compress_height: 原始图像高度
+            info: 错误信息
         """
+        if compress_width is None:
+            compress_width = original_width
+        if compress_height is None:
+            compress_height = original_height
         return CompressionResult(
             original_path=image_path,
             original_size=original_size,
             original_width=original_width,
             original_height=original_height,
-            compressed_width=original_width,
-            compressed_height=original_height,
-            ssim_score=1.0,
-            psnr_score=1.0,
-            perceptual_score=1.0,
-            feature_preservation=1.0,
-            processing_time=1.0,
+            compressed_width=compress_width,
+            compressed_height=compress_height,
+            ssim_score=0.0,
+            psnr_score=0.0,
+            perceptual_score=0.0,
+            feature_preservation=0.0,
+            processing_time=0.0,
             is_compressed=False,
             info=info
         )

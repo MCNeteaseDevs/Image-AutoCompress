@@ -47,10 +47,10 @@ class GameAssetsCompressor:
         self.pipeline.add_preprocess(BlackPreProcess())
         self.pipeline.add_preprocess(PathPreProcess())
         self.pipeline.add_preprocess(ModelTexturePreProcess())
-        self.pipeline.add_preprocess(IconPreProcess())
-        self.pipeline.add_preprocess(SizePreProcess())
-
+        self.pipeline.add_preprocess(IconPreProcess())  # 判断icon之前，先判断模型纹理
         self.pipeline.add_preprocess(ParticlePreProcess())
+        self.pipeline.add_preprocess(SizePreProcess())  # 判断大小，需在icon和特效的判断之后
+        # 后面这些需要做图像识别，需放在后面执行
         self.pipeline.add_preprocess(UISFXPreProcess())
         self.pipeline.add_preprocess(TextPreProcess())
         self.pipeline.add_preprocess(SFXPreProcess())

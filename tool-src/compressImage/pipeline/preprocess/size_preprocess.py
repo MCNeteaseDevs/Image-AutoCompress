@@ -23,6 +23,9 @@ class SizePreProcess(PipelinePreprocess):
             包含处理结果的字典
         """
         # 分辨率太低的图不处理
+        #   如果是icon图、特效图，则不处理
+        if last_result.get("is_icon") or last_result.get("is_particle"):
+            return last_result
         original_width = last_result.get("original_width", 0)
         original_height = last_result.get("original_height", 0)
         if original_width <= config.MIN_RESOLUTION and original_height <= config.MIN_RESOLUTION:
